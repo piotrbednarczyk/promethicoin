@@ -2,10 +2,13 @@
 bin/
 /db
 .eclipse
+.idea
 /lib/
 /logs/
 /modules
 /project/target
+/project/project
+*/target
 /target
 tmp/
 test-result
@@ -13,3 +16,5 @@ server.pid
 *.eml
 /dist/
 .cache
+.history
+RUNNING_PID
