@@ -1,13 +1,12 @@
 package connectors.poloniex.subscribtion;
 
+import akka.actor.ActorRef;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
+import com.google.inject.name.Named;
 import com.typesafe.config.Config;
-import models.CurrencyPair;
-import models.Price;
-import models.PriceUpdateDispatcher;
-import models.Ticker;
+import models.*;
 import play.Configuration;
 import play.Logger;
 import rx.functions.Action1;
@@ -21,29 +20,26 @@ import java.util.function.Function;
  * Created by Piotr Bednarczyk on 2017-02-19.
  */
 @Singleton
-public class TickerSubscriber implements Action1<PubSubData> {
+public class PriceUpdateSubscriber implements Action1<PubSubData> {
 
-    private final PriceUpdateDispatcher priceUpdateDispatcher;
+    private final ActorRef rulesEngineActor;
     private final Config config;
-    private final ArrayNodeToTicker arrayNodeToTicker;
+    private final ArrayNodeToPriceUpdate arrayNodeToPriceUpdate;
 
     @Inject
-    public TickerSubscriber(PriceUpdateDispatcher priceUpdateDispatcher, Configuration configuration) {
-        Logger.info("TickerSubscriber construction");
-
-        this.priceUpdateDispatcher = priceUpdateDispatcher;
+    public PriceUpdateSubscriber(Configuration configuration, @Named("rulesEngineActor") ActorRef rulesEngineActor) {
+        Logger.info("PriceUpdateSubscriber construction");
+        this.rulesEngineActor = rulesEngineActor;
         this.config = configuration.underlying();
-        this.arrayNodeToTicker = new ArrayNodeToTicker(config.getString("poloniex.name"));//TODO move poloniex to constructor
+        this.arrayNodeToPriceUpdate = new ArrayNodeToPriceUpdate(config.getString("poloniex.name"));//TODO move poloniex to constructor
     }
 
     @Override
     public void call(PubSubData data) {
         Logger.trace("Received {}", data.arguments());
-
-        Ticker ticker = arrayNodeToTicker.apply(data.arguments());
-
         try {
-            priceUpdateDispatcher.onPriceUpdate(ticker);
+            PriceUpdate priceUpdate = arrayNodeToPriceUpdate.apply(data.arguments());
+            rulesEngineActor.tell(priceUpdate, null);
         } catch (Exception e) {
             Logger.error("onPriceUpdate exception ", e);
             throw  e;
@@ -51,26 +47,28 @@ public class TickerSubscriber implements Action1<PubSubData> {
     }
 
     /**
-     * Ticker returned from Poloniex in JSON format looks as follows:
+     * PriceUpdate returned from Poloniex in JSON format:
      * [currencyPair, last, lowestAsk, highestBid, percentChange, baseVolume, quoteVolume, isFrozen, 24hrHigh, 24hrLow]
      */
-    public class ArrayNodeToTicker implements Function<ArrayNode, Ticker> {
+    public class ArrayNodeToPriceUpdate implements Function<ArrayNode, PriceUpdate> {
 
         private final String source;
 
-        public ArrayNodeToTicker(String source) {
+        public ArrayNodeToPriceUpdate(String source) {
             this.source = source;
         }
 
         @Override
-        public Ticker apply(ArrayNode node) {
-            Ticker.TickerBuilder builder = Ticker.builder();
-            
-            builder.source(source);
+        public PriceUpdate apply(ArrayNode node) {
+            PriceUpdate.PriceUpdateBuilder builder = PriceUpdate.builder();
+
+            String currencyCodes = node.get(0).asText();
+
+            builder.market(new Market(source, new CurrencyPair(currencyCodes)));
             builder.occurrenceTime(LocalDateTime.now());
             builder.lastPrice(new Price(
                     new BigDecimal(node.get(1).asText()),
-                    new CurrencyPair(node.get(0).asText()))
+                    new CurrencyPair(currencyCodes))
             );
             builder.lowestAsk(new BigDecimal(node.get(2).asText()));
             builder.highestBid(new BigDecimal(node.get(3).asText()));

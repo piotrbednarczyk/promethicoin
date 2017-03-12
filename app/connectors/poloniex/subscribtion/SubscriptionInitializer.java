@@ -22,17 +22,17 @@ public class SubscriptionInitializer implements ApplicationLifecycle {
     private final Config config;
     private final WampClientProvider wampClientProvider;
     private final OrderBookSubscriberFactory subscriberFactory;
-    private final TickerSubscriber tickerSubscriber;
+    private final PriceUpdateSubscriber priceUpdateSubscriber;
     private WampClient client;
 
     @Inject
     public SubscriptionInitializer(Configuration configuration,
-                                   TickerSubscriber tickerSubscriber,
+                                   PriceUpdateSubscriber priceUpdateSubscriber,
                                    WampClientProvider wampClientProvider,
                                    OrderBookSubscriberFactory subscriberFactory) throws Exception {
         this.config = configuration.underlying();
         this.wampClientProvider = wampClientProvider;
-        this.tickerSubscriber = tickerSubscriber;
+        this.priceUpdateSubscriber = priceUpdateSubscriber;
         this.subscriberFactory = subscriberFactory;
 
         startSubscriptions();
@@ -50,7 +50,7 @@ public class SubscriptionInitializer implements ApplicationLifecycle {
 
         client = wampClientProvider.getWampClient();
 
-        subscribeToTicker(tickerSubscriber);
+        subscribeToTicker(priceUpdateSubscriber);
         subscribeToOrderBooks(subscriberFactory, loadCurrencyPairs(), loadPoloniexName());
 
         client.open();
@@ -75,11 +75,11 @@ public class SubscriptionInitializer implements ApplicationLifecycle {
         }));
     }
 
-    private void subscribeToTicker(TickerSubscriber tickerSubscriber) {
+    private void subscribeToTicker(PriceUpdateSubscriber priceUpdateSubscriber) {
         if (config.getBoolean("poloniex.wamp.ticker.enabled")) {
             client.statusChanged().subscribe((state) -> {
                 if (state instanceof WampClient.ConnectedState) {
-                    client.makeSubscription("ticker").subscribe(tickerSubscriber);
+                    client.makeSubscription("ticker").subscribe(priceUpdateSubscriber);
                 }
             });
         }

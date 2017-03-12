@@ -13,6 +13,4 @@ public interface Order {
     Market getMarket();
 
     BigDecimal getVolume();
-
-    Price getPrice();
 }

@@ -14,6 +14,7 @@ import java.text.MessageFormat;
 @Data
 @Builder
 public class OrderBookUpdate {
+    private final long sequence;
     @NonNull private final Market market;
     @NonNull private final BigDecimal rate;
     private final BigDecimal volume;
@@ -22,16 +23,6 @@ public class OrderBookUpdate {
 
     public enum OrderBookUpdateType {
         ORDER_BOOK_MODIFY,
-        ORDER_BOOK_REMOVE;
-
-        public static OrderBookUpdateType fromRecievedUpdateType(String type) {
-            if (type.equalsIgnoreCase("orderBookModify")) {
-                return ORDER_BOOK_MODIFY;
-            } else if (type.equalsIgnoreCase("orderBookRemove")) {
-                return ORDER_BOOK_REMOVE;
-            } else {
-                throw new IllegalArgumentException(MessageFormat.format("Can't map provided value {0} to OrderBookUpdateType", type));
-            }
-        }
+        ORDER_BOOK_REMOVE
     }
 }

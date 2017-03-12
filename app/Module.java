@@ -4,16 +4,19 @@ import com.google.inject.assistedinject.FactoryModuleBuilder;
 import connectors.poloniex.subscribtion.OrderBookSubscriberFactory;
 import connectors.poloniex.subscribtion.SubscriptionInitializer;
 import models.PriceStatisticsProvider;
+import models.RulesEngineActor;
 import models.SimplePriceStatisticsProvider;
 import models.UpdatablePriceStatisticsProvider;
 import models.detector.PricePatternFactory;
-import models.order.OrderBookHolder;
+import models.order.OrderBookActor;
+import models.order.OrderExecutionActor;
 import play.Logger;
+import play.libs.akka.AkkaGuiceSupport;
 
 /**
  * Created by Piotr on 2017-02-17.
  */
-public class Module extends AbstractModule {
+public class Module extends AbstractModule implements AkkaGuiceSupport {
 
     @Override
     protected void configure() {
@@ -29,5 +32,9 @@ public class Module extends AbstractModule {
         bind(SimplePriceStatisticsProvider.class).in(Singleton.class);
 
         bind(SubscriptionInitializer.class).asEagerSingleton();
+
+        bindActor(OrderBookActor.class, "orderBookActor");
+        bindActor(OrderExecutionActor.class, "orderExecutionActor");
+        bindActor(RulesEngineActor.class, "rulesEngineActor");
     }
 }

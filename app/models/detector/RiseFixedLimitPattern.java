@@ -3,7 +3,7 @@ package models.detector;
 import com.google.inject.Inject;
 import com.google.inject.assistedinject.Assisted;
 import models.Price;
-import models.Ticker;
+import models.PriceUpdate;
 
 import java.util.Objects;
 
@@ -21,8 +21,8 @@ public class RiseFixedLimitPattern implements PricePattern {
     }
 
     @Override
-    public boolean isMatched(Ticker ticker) {
-        Objects.requireNonNull(ticker);
-        return ticker.getLastPrice().greaterOrEqual(riseLimit);
+    public boolean isMatched(PriceUpdate priceUpdate) {
+        Objects.requireNonNull(priceUpdate);
+        return priceUpdate.getLastPrice().greaterOrEqual(riseLimit);
     }
 }

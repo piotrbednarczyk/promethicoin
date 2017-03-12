@@ -7,18 +7,20 @@ import models.detector.PricePattern;
  */
 public class Rule {
 
+    private final Market market;
     private final PricePattern patternDetector;
     private final Action action;
     private final boolean removableAfterSingleUse;
 
-    public Rule(PricePattern patternDetector, Action action, boolean removableAfterSingleUse) {
+    public Rule(Market market, PricePattern patternDetector, Action action, boolean removableAfterSingleUse) {
+        this.market = market;
         this.patternDetector = patternDetector;
         this.action = action;
         this.removableAfterSingleUse = removableAfterSingleUse;
     }
 
-    public boolean isMatched(Ticker ticker) {
-        return patternDetector.isMatched(ticker);
+    public boolean isMatched(PriceUpdate priceUpdate) {
+        return patternDetector.isMatched(priceUpdate);
     }
 
     public void executeAction() {
@@ -27,5 +29,9 @@ public class Rule {
 
     public boolean isRemovableAfterSingleUse() {
         return removableAfterSingleUse;
+    }
+
+    public Market getMarket() {
+        return market;
     }
 }

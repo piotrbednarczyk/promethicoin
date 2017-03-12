@@ -8,15 +8,15 @@ import models.Price;
 import java.math.BigDecimal;
 
 /**
- * Created by Piotr Bednarczyk on 2017-02-25.
+ * Created by Piotr Bednarczyk on 2017-03-10.
  */
 @Data
-public class MarketOrder implements Order {
+public class LimitOrder {
 
     @NonNull
     private final Market market;
     @NonNull
     private final BigDecimal volume;
     @NonNull
-    private final OrderSide side;
+    private final Price price;
 }

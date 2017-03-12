@@ -1,99 +1,132 @@
 package connectors.poloniex.subscribtion;
 
+import akka.actor.ActorRef;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.google.inject.Inject;
 import com.google.inject.assistedinject.Assisted;
+import com.google.inject.name.Named;
 import models.Market;
-import models.order.*;
-import models.order.OrderBookUpdate.OrderBookUpdateBuilder;
+import models.order.OrderBookUpdate;
 import models.order.OrderBookUpdate.OrderBookUpdateType;
+import models.order.OrderSide;
 import play.Logger;
 import rx.functions.Action1;
+import util.IteratorToStream;
 import ws.wamp.jawampa.PubSubData;
 
 import java.math.BigDecimal;
-import java.util.Iterator;
+import java.text.MessageFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
-import java.util.stream.StreamSupport;
+
+import static models.order.OrderBookUpdate.OrderBookUpdateType.ORDER_BOOK_MODIFY;
+import static models.order.OrderBookUpdate.OrderBookUpdateType.ORDER_BOOK_REMOVE;
 
 /**
  * Created by Piotr on 2017-02-19.
  */
 public class OrderBookSubscriber implements Action1<PubSubData> {
 
-    private final OrderBookUpdater orderBookUpdater;
-    private final JsonNodeToOrderBookUpdate toOrderBookItem;
+    private final ActorRef orderBookActor;
     private final Market market;
 
-    private long lastSequence;
-
     @Inject
-    public OrderBookSubscriber(OrderBookUpdater orderBookUpdater, @Assisted Market market) {
+    public OrderBookSubscriber(@Named("orderBookActor") ActorRef orderBookActor, @Assisted Market market) {
         Logger.info("OrderBookSubscriber construction for {}", market);
 
-        this.orderBookUpdater = orderBookUpdater;
-        this.toOrderBookItem = new JsonNodeToOrderBookUpdate();
+        this.orderBookActor = orderBookActor;
         this.market = market;
     }
 
     @Override
     public void call(PubSubData data) {
-        Logger.trace("Received {} {} for {}",
-                data.arguments(), data.keywordArguments(), market);
-
-        long sequence = getMessageSequence(data);
-        Map<Boolean, List<JsonNode>> tradesAndOrderBooks = asStream(data.arguments().elements())
-                .collect(Collectors.partitioningBy(jsonNode -> jsonNode.get("type").asText().equals("newTrade")));
+        if(Logger.isTraceEnabled()) {
+            Logger.trace("Received {} {} for {}", data.arguments(), data.keywordArguments(), market);
+        }
 
         try {
-            tradesAndOrderBooks.get(Boolean.FALSE)
-                    .stream()
-                    .map(jsonNode -> toOrderBookItem.apply(jsonNode))
-                    .forEachOrdered(orderBookUpdate -> orderBookUpdater.update(orderBookUpdate, sequence));
-
+            processData(data);
         } catch (Exception e) {
-            Logger.error("orderBookUpdate exception ", e);
+            Logger.error("Message processing exception ", e);
             throw e;
-        } finally {
-            lastSequence = sequence;
         }
+    }
+
+    private void processData(PubSubData data) {
+        long sequence = getMessageSequence(data);
+        Map<Boolean, List<JsonNode>> tradesAndOrderBookUpdates = extractUpdatesFromMessage(data);
+        sendOrderBookUpdates(tradesAndOrderBookUpdates, sequence);
+    }
+
+    private void sendOrderBookUpdates(Map<Boolean, List<JsonNode>> tradesAndOrderBookUpdates, long sequence) {
+        tradesAndOrderBookUpdates.get(Boolean.FALSE)
+                .stream()
+                .map(new JsonNodeToOrderBookUpdate(sequence))
+                .forEach(orderBookUpdate -> orderBookActor.tell(orderBookUpdate, null));
+    }
+
+    private Map<Boolean, List<JsonNode>> extractUpdatesFromMessage(PubSubData data) {
+        return new IteratorToStream<JsonNode>()
+                .apply(data.arguments().elements())
+                .collect(Collectors.partitioningBy(jsonNode -> jsonNode.get("type").asText().equals("newTrade")));
     }
 
     private long getMessageSequence(PubSubData data) {
         return data.keywordArguments().get("seq").asLong();
     }
 
-    private Stream<JsonNode> asStream(Iterator<JsonNode> iterator) {
-        Iterable<JsonNode> iterable = () -> iterator;
-        return StreamSupport.stream(iterable.spliterator(), false);
-    }
-
-//    [{data: {rate: '0.00300888', type: 'bid', amount: '3.32349029'},type: 'orderBookModify'}]
-//    [{data: {rate: '0.00311164', type: 'ask' },type: 'orderBookRemove'}]
-//    [{data: {tradeID: '364476',rate: '0.00300888',amount: '0.03580906',date: '2014-10-07 21:51:20',total: '0.00010775',type: 'sell'},type: 'newTrade'}]
+    /**
+     *     Order book updates returned from Poloniex in JSON format:
+     *     [{data: {rate: '0.00300888', type: 'bid', amount: '3.32349029'},type: 'orderBookModify'}]
+     *     [{data: {rate: '0.00311164', type: 'ask' },type: 'orderBookRemove'}]
+     */
     public class JsonNodeToOrderBookUpdate implements Function<JsonNode, OrderBookUpdate> {
+
+        private final long sequence;
+
+        public JsonNodeToOrderBookUpdate(long sequence) {
+            this.sequence = sequence;
+        }
 
         @Override
         public OrderBookUpdate apply(JsonNode node) {
-            OrderBookUpdateBuilder builder = OrderBookUpdate.builder();
-
-            OrderBookUpdateType type = OrderBookUpdateType.fromRecievedUpdateType(node.get("type").asText());
+            OrderBookUpdateType type = getOrderBookUpdateType(node);
             JsonNode data = node.get("data");
 
-            builder.type(type);
-            builder.market(market);
-            builder.side(OrderSide.fromReceivedSide(data.get("type").asText()));
-            builder.rate(new BigDecimal(data.get("rate").asText()));
-            if (type.equals(OrderBookUpdateType.ORDER_BOOK_MODIFY)) {
-                builder.volume(new BigDecimal(data.get("amount").asText()));
-            }
+            return OrderBookUpdate.builder()
+                    .type(type)
+                    .market(market)
+                    .sequence(sequence)
+                    .side(getOrderBookSide(data))
+                    .rate(new BigDecimal(data.get("rate").asText()))
+                    .volume(getVolume(type, data))
+                    .build();
+        }
 
-            return builder.build();
+        private BigDecimal getVolume(OrderBookUpdateType type, JsonNode data) {
+            return ORDER_BOOK_MODIFY.equals(type) ? new BigDecimal(data.get("amount").asText()) : null;
+        }
+
+        private OrderSide getOrderBookSide(JsonNode data) {
+           return OrderSide.valueOf(data.get("type").asText().toUpperCase());
+        }
+
+        private OrderBookUpdateType getOrderBookUpdateType(JsonNode node) {
+            switch (node.get("type").asText()) {
+                case "orderBookModify":
+                    return ORDER_BOOK_MODIFY;
+                case "orderBookRemove":
+                    return ORDER_BOOK_REMOVE;
+                default:
+                    throw new IllegalArgumentException(
+                            MessageFormat.format("Can't map provided value {0} to OrderBookUpdateType",
+                                    node.get("type").asText()));
+            }
         }
     }
 
+    //TRADES
+    //[{data: {tradeID: '364476',rate: '0.00300888',amount: '0.03580906',date: '2014-10-07 21:51:20',total: '0.00010775',type: 'sell'},type: 'newTrade'}]
 }

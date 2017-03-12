@@ -12,11 +12,11 @@ import java.time.LocalDateTime;
  */
 @Data
 @Builder
-public class Ticker {
+public class PriceUpdate {
+    @NonNull
+    private final Market market;
     @NonNull
     private final LocalDateTime occurrenceTime;
-    @NonNull
-    private final String source;
     @NonNull
     private final Price lastPrice;
     @NonNull
@@ -37,6 +37,6 @@ public class Ticker {
     private final Boolean isFrozen;
 
     public CurrencyPair getCurrencyPair() {
-        return lastPrice.getCurrencyPair();
+        return market.getCurrencyPair();
     }
 }

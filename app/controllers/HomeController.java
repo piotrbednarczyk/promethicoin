@@ -2,7 +2,6 @@ package controllers;
 
 import com.google.inject.Inject;
 import com.typesafe.config.Config;
-import models.Ticker;
 import play.Configuration;
 import play.Logger;
 import play.libs.ws.*;

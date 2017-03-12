@@ -3,7 +3,7 @@ package models.detector;
 import com.google.inject.Inject;
 import com.google.inject.assistedinject.Assisted;
 import models.Price;
-import models.Ticker;
+import models.PriceUpdate;
 import play.Logger;
 
 import java.util.Objects;
@@ -23,9 +23,9 @@ public class DropFixedLimitPattern implements PricePattern {
     }
 
     @Override
-    public boolean isMatched(Ticker ticker) {
+    public boolean isMatched(PriceUpdate priceUpdate) {
         Logger.info("Checking price drop...");
-        Objects.requireNonNull(ticker);
-        return ticker.getLastPrice().lessOrEqual(dropLimit);
+        Objects.requireNonNull(priceUpdate);
+        return priceUpdate.getLastPrice().lessOrEqual(dropLimit);
     }
 }

@@ -1,7 +1,5 @@
 package models;
 
-import com.google.inject.Singleton;
-
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -12,22 +10,22 @@ import java.util.Optional;
  */
 public class SimplePriceStatisticsProvider implements UpdatablePriceStatisticsProvider {
 
-    private final Map<CurrencyPair, PriceStatistics> currencyPairStatistics = new HashMap<>();
+    private final Map<Market, PriceStatistics> currencyPairStatistics = new HashMap<>();
 
     @Override
-    public void update(Ticker ticker) {
-        Objects.requireNonNull(ticker);
-        CurrencyPair currencyPair = ticker.getCurrencyPair();
+    public void update(PriceUpdate priceUpdate) {
+        Objects.requireNonNull(priceUpdate);
+        Market market = priceUpdate.getMarket();
 
-        if(currencyPairStatistics.containsKey(currencyPair)) {
-            currencyPairStatistics.get(currencyPair).updateOnLastPrice(ticker.getLastPrice());
+        if(currencyPairStatistics.containsKey(market)) {
+            currencyPairStatistics.get(market).updateOnLastPrice(priceUpdate.getLastPrice());
         } else {
-            currencyPairStatistics.put(currencyPair, new PriceStatistics(ticker.getLastPrice()));
+            currencyPairStatistics.put(market, new PriceStatistics(priceUpdate.getLastPrice()));
         }
     }
 
     @Override
-    public Optional<PriceStatistics> getStatisticsForCurrencyPair(CurrencyPair currencyPair) {
-        return Optional.ofNullable(currencyPairStatistics.get(currencyPair));
+    public Optional<PriceStatistics> getStatisticsForCurrencyPair(Market market) {
+        return Optional.ofNullable(currencyPairStatistics.get(market));
     }
 }
